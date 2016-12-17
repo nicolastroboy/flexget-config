@@ -1,0 +1,337 @@
+﻿secrets: secret.yml
+
+web_server: 8081
+
+templates:
+
+  global:
+    free_space:
+      path: '{{ secrets.dirs.completed }}'
+      space: 50000
+    pathscrub: windows
+    no_entries_ok: yes
+    domain_delay:
+      trakt.tv: 5 seconds
+      t411.li: 1 seconds
+  
+  disable-seen:
+    disable: 
+      - seen
+      - seen_info_hash
+      - seen_movies
+  
+  movies:
+    regexp:
+      reject_excluding:
+        - \b(french|truefrench|multi|vff|fr|vfq)\b: {from: title}
+      reject:
+        - (s|d)ub(s|bed)?\b: {from: title}
+        - \bspanish\b: {from: title}
+        - \b(duo|tri|quadri|tetra|penta)logy\b: {from: title}
+        - \b3-?D\b: {from: title}
+        - \btrailer\b: {from: title}
+        - \bR5\b: {from: title}
+        - \bWEBSCR\b: {from: title}
+        - \bscreener\b: {from: title}
+        - \bTS\b: {from: title}
+        - \bCam\b: {from: title}
+        - '{C_P}': {from: title}
+        - TrTd TeaM: {from: title}
+        - \[TNTVillage\]: {from: title}
+        - \[facepalm\]: {from: title}
+        - \bASAP\b: {from: title}
+    torrent_alive:
+      min_seeds: 3
+      reject_for: 1 day
+    quality: 720p+
+    content_size:
+      max: 8000
+      min: 900
+    imdb_lookup: yes
+    trakt_lookup: yes
+    require_field: imdb_url
+
+  series:
+    torrent_alive:
+      min_seeds: 3
+      reject_for: 1 day
+    quality: 720p+
+    content_size:
+      max: 3000
+    thetvdb_lookup: yes
+    trakt_lookup: yes
+    require_field: tvdb_url  
+    
+  vostfr:
+    regexp:
+      reject_excluding:
+        - \b(vostfr)\b: {from: title}
+      reject:
+        - \bR5\b: {from: title}
+        - \bWEBSCR\b: {from: title}
+        - \bscreener\b: {from: title}
+        - \bTS\b: {from: title}
+        - \bCam\b: {from: title}
+       
+  vf:
+    regexp:
+      reject_excluding:
+        - \b(french|truefrench|multi|vff|fr|vfq)\b: {from: title}
+      reject:
+        - \bR5\b: {from: title}
+        - \bWEBSCR\b: {from: title}
+        - \bscreener\b: {from: title}
+        - \bTS\b: {from: title}
+        - \bCam\b: {from: title}
+        
+tasks:
+
+  movies-clean-trakt:
+    priority: 1
+    template: disable-seen
+    trakt_list:
+      account: '{{ secrets.trakt.account }}'
+      list: watchlist
+      type: movies
+    crossmatch:
+      from:
+        - trakt_list:
+            account: '{{ secrets.trakt.account }}'
+            list: collection
+            type: movies
+      fields:
+        - imdb_id
+      action: accept
+    list_remove:
+      - trakt_list:
+          account: '{{ secrets.trakt.account }}'
+          list: watchlist
+          type: movies
+      - movie_list: '{{ secrets.list.movies }}'
+
+  movies-clean-local:
+    priority: 2
+    template: disable-seen
+    movie_list: '{{ secrets.list.movies }}'
+    accept_all: yes
+    list_remove:
+      - movie_list: '{{ secrets.list.movies }}'
+    
+  movies-update:
+    priority: 3
+    disable: seen
+    trakt_list:
+      account: '{{ secrets.trakt.account }}'
+      list: watchlist
+      type: movies
+      strip_dates: yes
+    accept_all: yes
+    imdb_lookup: yes
+    list_add:
+      - movie_list: '{{ secrets.list.movies }}'
+    
+  movies-search:
+    priority: 4
+    template: movies
+    discover:
+      what:
+        - movie_list: 
+            list_name: '{{ secrets.list.movies }}'
+            strip_year: yes
+      from:
+        - t411: 
+            category: Film
+        - search_rss: https://www.omgtorrent.me/rss/rss-films.php
+        #- t411: 
+            #category: Animation # https://github.com/Flexget/Flexget/issues/1243
+    list_match:
+      from:
+        - movie_list: '{{ secrets.list.movies }}'
+    download: '{{ secrets.dirs.movies }}'
+    limit_new: 1
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Film en téléchargement :"
+      message: "{{imdb_name}}"
+      url: "https://trakt.tv/movies/{{trakt_movie_id}}"
+      
+  movies-discover:
+    template: movies
+    inputs:
+      - t411:
+          category: Film
+      - rss: https://www.omgtorrent.me/rss/rss-films.php
+    if:
+      - imdb_year < (now.year - 4): reject
+      - imdb_score < 7.0: reject
+      - imdb_votes < 100: reject
+      - imdb_mpaa_rating == R: reject
+      - imdb_mpaa_rating == NC_17: reject
+      - imdb_mpaa_rating == X: reject
+      - "'musical' in (imdb_genres or [])": reject
+      - "'horror' in (imdb_genres or [])": reject
+      - "'music' in (imdb_genres or [])": reject
+    crossmatch:
+      from:
+        - trakt_list:
+            account: '{{ secrets.trakt.account }}'
+            list: watched
+            type: movies
+        - trakt_list:
+            account: '{{ secrets.trakt.account }}'
+            list: collection
+            type: movies
+      fields:
+        - imdb_id
+      action: reject
+    accept_all: yes
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Film disponible :"
+      message: "{{imdb_name}}"
+      url: "https://trakt.tv/movies/{{trakt_movie_id}}"
+      
+  series-update-vostfr:
+    priority: 1
+    template: disable-seen
+    next_trakt_episodes:
+      username: '{{ secrets.trakt.account }}'
+      account: '{{ secrets.trakt.account }}'
+      context: watched
+      list: shows-vostfr
+      position: next
+      strip_dates: yes
+    accept_all: yes
+    set_series_begin: yes
+    
+  series-update-vf:
+    priority: 1
+    template: disable-seen
+    next_trakt_episodes:
+      username: '{{ secrets.trakt.account }}'
+      account: '{{ secrets.trakt.account }}'
+      context: watched
+      list: shows-vf
+      position: next
+      strip_dates: yes
+    accept_all: yes
+    set_series_begin: yes
+  
+  series-search-vostfr:
+    priority: 2    
+    template: 
+      - series
+      - vostfr
+    configure_series:
+      from:
+        trakt_list:
+          username: '{{ secrets.trakt.account }}'
+          account: '{{ secrets.trakt.account }}'
+          list: shows-vostfr
+          type: shows
+          strip_dates: yes
+    discover:
+      what:
+        - next_series_episodes: yes
+      from:
+        - t411: 
+            category: Série TV  
+        - t411: 
+            category: Emission TV 
+        - t411: 
+            category: Animation Série
+    download: '{{ secrets.dirs.series }}'
+    limit_new: 2
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Episode en téléchargement :"
+      message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
+      url: "https://trakt.tv/movies/{{trakt_id}}"
+      
+  series-search-vf:
+    priority: 2    
+    template: 
+      - series
+      - vf
+    configure_series:
+      from:
+        trakt_list:
+          username: '{{ secrets.trakt.account }}'
+          account: '{{ secrets.trakt.account }}'
+          list: shows-vf
+          type: shows
+          strip_dates: yes
+    discover:
+      what:
+        - next_series_episodes: yes
+      from:
+        - t411: 
+            category: Série TV
+        - t411: 
+            category: Emission TV
+        - t411: 
+            category: Animation Série
+    download: '{{ secrets.dirs.series }}'
+    limit_new: 2
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Episode en téléchargement :"
+      message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
+      url: "https://trakt.tv/movies/{{trakt_id}}"
+    
+  quotidien:
+    t411:
+      category: Emission TV
+    regexp:
+      accept:
+        - \Quotidien - TMC\b: {from: title}
+    only_new: yes
+    limit_new: 1
+    download: '{{ secrets.dirs.emissions }}'
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Quotidien :"
+      message: "{{title}}"
+      url: "http://www.tf1.fr/tmc/quotidien-avec-yann-barthes"
+    
+  comics:
+    inputs:
+      - rss: { url: 'https://extratorrent.stream/rss.xml?cid=848&type=last', silent: yes }
+    regexp:
+      accept:
+        - \DC Week\b: {from: title}
+        - \Marvel Week\b: {from: title}
+        - \Image Week\b: {from: title}
+    only_new: yes
+    limit_new: 3
+    download: '{{ secrets.dirs.comics }}'
+    pushbullet:
+      api_key: '{{ secrets.pushbullet.api }}'
+      title: "Comics :"
+      message: "{{title}}"
+      url: "http://www.comiclist.com/index.php"
+    
+schedules:
+  - tasks: [movies-update, movies-search]
+    schedule:
+      minute: 15,45
+      hour: 1
+      day_of_week: mon,wed
+  - tasks: [movies-discover]
+    schedule:
+      minute: 0
+      hour: 5
+  - tasks: [series*]
+    schedule:
+      minute: 15,45
+      hour: 1
+      day_of_week: tue,fri
+  - tasks: [quotidien]
+    schedule:
+      minute: 15,45
+      hour: 8
+  - tasks: [comics]
+    schedule:
+      minute: 0
+      hour: 8
+      day_of_week: thu
