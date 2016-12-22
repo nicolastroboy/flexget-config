@@ -50,6 +50,7 @@ templates:
     imdb_lookup: yes
     trakt_lookup: yes
     require_field: imdb_url
+    exists_movie: '{{ secrets.dirs.completed_movies }}'
 
   series:
     torrent_alive:
@@ -60,7 +61,8 @@ templates:
       max: 3000
     thetvdb_lookup: yes
     trakt_lookup: yes
-    require_field: tvdb_url  
+    require_field: tvdb_url
+    exists_series: '{{ secrets.dirs.completed_series }}'
     
   vostfr:
     regexp:
@@ -133,6 +135,7 @@ tasks:
   movies-search:
     priority: 4
     template: movies
+    seen: local
     discover:
       what:
         - movie_list: 
@@ -141,7 +144,6 @@ tasks:
       from:
         - t411: 
             category: Film
-        - search_rss: https://www.omgtorrent.me/rss/rss-films.php
         #- t411: 
             #category: Animation # https://github.com/Flexget/Flexget/issues/1243
     list_match:
@@ -160,7 +162,6 @@ tasks:
     inputs:
       - t411:
           category: Film
-      - rss: https://www.omgtorrent.me/rss/rss-films.php
     if:
       - imdb_year < (now.year - 4): reject
       - imdb_score < 7.0: reject
@@ -190,7 +191,7 @@ tasks:
       title: "Film disponible :"
       message: "{{imdb_name}}"
       url: "https://trakt.tv/movies/{{trakt_movie_id}}"
-      
+
   series-update-vostfr:
     priority: 1
     template: disable-seen
@@ -279,21 +280,6 @@ tasks:
       message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
       url: "https://trakt.tv/movies/{{trakt_id}}"
     
-  quotidien:
-    t411:
-      category: Emission TV
-    regexp:
-      accept:
-        - \Quotidien - TMC\b: {from: title}
-    only_new: yes
-    limit_new: 1
-    download: '{{ secrets.dirs.emissions }}'
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Quotidien :"
-      message: "{{title}}"
-      url: "http://www.tf1.fr/tmc/quotidien-avec-yann-barthes"
-    
   comics:
     inputs:
       - rss: { url: 'https://extratorrent.stream/rss.xml?cid=848&type=last', silent: yes }
@@ -314,22 +300,16 @@ tasks:
 schedules:
   - tasks: [movies-update, movies-search]
     schedule:
-      minute: 15,45
+      minute: 0
       hour: 1
-      day_of_week: mon,wed
   - tasks: [movies-discover]
     schedule:
       minute: 0
-      hour: 5
+      hour: 19
   - tasks: [series*]
     schedule:
-      minute: 15,45
+      minute: 15
       hour: 1
-      day_of_week: tue,fri
-  - tasks: [quotidien]
-    schedule:
-      minute: 15,45
-      hour: 8
   - tasks: [comics]
     schedule:
       minute: 0
