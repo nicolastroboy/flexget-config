@@ -298,7 +298,7 @@ tasks:
       url: "http://www.comiclist.com/index.php"
     
 schedules:
-  - tasks: [movies-update, movies-search]
+  - tasks: [movies-clean*, movies-update, movies-search]
     schedule:
       minute: 0
       hour: 1
