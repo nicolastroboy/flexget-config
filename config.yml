@@ -1,4 +1,4 @@
-﻿secrets: secret.yml
+﻿variables: variables.yml
 
 web_server: 8081
 
@@ -6,7 +6,7 @@ templates:
 
   global:
     free_space:
-      path: '{{ secrets.dirs.completed }}'
+      path: '{? dirs.completed ?}'
       space: 50000
     pathscrub: windows
     no_entries_ok: yes
@@ -50,7 +50,7 @@ templates:
     imdb_lookup: yes
     trakt_lookup: yes
     require_field: imdb_url
-    exists_movie: '{{ secrets.dirs.completed_movies }}'
+    exists_movie: '{? dirs.completed_movies ?}'
 
   series:
     torrent_alive:
@@ -62,7 +62,7 @@ templates:
     thetvdb_lookup: yes
     trakt_lookup: yes
     require_field: tvdb_url
-    exists_series: '{{ secrets.dirs.completed_series }}'
+    exists_series: '{? dirs.completed_series ?}'
     
   vostfr:
     regexp:
@@ -92,13 +92,13 @@ tasks:
     priority: 1
     template: disable-seen
     trakt_list:
-      account: '{{ secrets.trakt.account }}'
+      account: '{? trakt.account ?}'
       list: watchlist
       type: movies
     crossmatch:
       from:
         - trakt_list:
-            account: '{{ secrets.trakt.account }}'
+            account: '{? trakt.account ?}'
             list: collection
             type: movies
       fields:
@@ -106,31 +106,31 @@ tasks:
       action: accept
     list_remove:
       - trakt_list:
-          account: '{{ secrets.trakt.account }}'
+          account: '{? trakt.account ?}'
           list: watchlist
           type: movies
-      - movie_list: '{{ secrets.list.movies }}'
+      - movie_list: '{? list.movies ?}'
 
   movies-clean-local:
     priority: 2
     template: disable-seen
-    movie_list: '{{ secrets.list.movies }}'
+    movie_list: '{? list.movies ?}'
     accept_all: yes
     list_remove:
-      - movie_list: '{{ secrets.list.movies }}'
+      - movie_list: '{? list.movies ?}'
     
   movies-update:
     priority: 3
     disable: seen
     trakt_list:
-      account: '{{ secrets.trakt.account }}'
+      account: '{? trakt.account ?}'
       list: watchlist
       type: movies
       strip_dates: yes
     accept_all: yes
     imdb_lookup: yes
     list_add:
-      - movie_list: '{{ secrets.list.movies }}'
+      - movie_list: '{? list.movies ?}'
     
   movies-search:
     priority: 4
@@ -139,7 +139,7 @@ tasks:
     discover:
       what:
         - movie_list: 
-            list_name: '{{ secrets.list.movies }}'
+            list_name: '{? list.movies ?}'
             strip_year: yes
       from:
         - t411: 
@@ -148,14 +148,17 @@ tasks:
             #category: Animation # https://github.com/Flexget/Flexget/issues/1243
     list_match:
       from:
-        - movie_list: '{{ secrets.list.movies }}'
-    download: '{{ secrets.dirs.movies }}'
+        - movie_list: '{? list.movies ?}'
+    download: '{? dirs.movies ?}'
     limit_new: 1
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Film en téléchargement :"
-      message: "{{imdb_name}}"
-      url: "https://trakt.tv/movies/{{trakt_movie_id}}"
+    notify:
+      entries:
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.api ?}'
+              title: "Film en téléchargement :"
+              message: "{{imdb_name}}"
+              url: "https://trakt.tv/movies/{{trakt_movie_id}}"
       
   movies-discover:
     template: movies
@@ -175,29 +178,32 @@ tasks:
     crossmatch:
       from:
         - trakt_list:
-            account: '{{ secrets.trakt.account }}'
+            account: '{? trakt.account ?}'
             list: watched
             type: movies
         - trakt_list:
-            account: '{{ secrets.trakt.account }}'
+            account: '{? trakt.account ?}'
             list: collection
             type: movies
       fields:
         - imdb_id
       action: reject
     accept_all: yes
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Film disponible :"
-      message: "{{imdb_name}}"
-      url: "https://trakt.tv/movies/{{trakt_movie_id}}"
+    notify:
+      entries:
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.api ?}'
+              title: "Film disponible :"
+              message: "{{imdb_name}}"
+              url: "https://trakt.tv/movies/{{trakt_movie_id}}"
 
   series-update-vostfr:
     priority: 1
     template: disable-seen
     next_trakt_episodes:
-      username: '{{ secrets.trakt.account }}'
-      account: '{{ secrets.trakt.account }}'
+      username: '{? trakt.account ?}'
+      account: '{? trakt.account ?}'
       context: watched
       list: shows-vostfr
       position: next
@@ -209,8 +215,8 @@ tasks:
     priority: 1
     template: disable-seen
     next_trakt_episodes:
-      username: '{{ secrets.trakt.account }}'
-      account: '{{ secrets.trakt.account }}'
+      username: '{? trakt.account ?}'
+      account: '{? trakt.account ?}'
       context: watched
       list: shows-vf
       position: next
@@ -219,15 +225,17 @@ tasks:
     set_series_begin: yes
   
   series-search-vostfr:
-    priority: 2    
+    priority: 2
+    plugin_priority:
+      manipulate: 250
     template: 
       - series
       - vostfr
     configure_series:
       from:
         trakt_list:
-          username: '{{ secrets.trakt.account }}'
-          account: '{{ secrets.trakt.account }}'
+          username: '{? trakt.account ?}'
+          account: '{? trakt.account ?}'
           list: shows-vostfr
           type: shows
           strip_dates: yes
@@ -241,13 +249,16 @@ tasks:
             category: Emission TV 
         - t411: 
             category: Animation Série
-    download: '{{ secrets.dirs.series }}'
+    download: '{? dirs.series ?}'
     limit_new: 2
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Episode en téléchargement :"
-      message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
-      url: "https://trakt.tv/movies/{{trakt_id}}"
+    notify:
+      entries:
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.api ?}'
+              title: "Episode en téléchargement :"
+              message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
+              url: "https://trakt.tv/movies/{{trakt_id}}"
       
   series-search-vf:
     priority: 2    
@@ -257,8 +268,8 @@ tasks:
     configure_series:
       from:
         trakt_list:
-          username: '{{ secrets.trakt.account }}'
-          account: '{{ secrets.trakt.account }}'
+          username: '{? trakt.account ?}'
+          account: '{? trakt.account ?}'
           list: shows-vf
           type: shows
           strip_dates: yes
@@ -272,17 +283,20 @@ tasks:
             category: Emission TV
         - t411: 
             category: Animation Série
-    download: '{{ secrets.dirs.series }}'
+    download: '{? dirs.series ?}'
     limit_new: 2
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Episode en téléchargement :"
-      message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
-      url: "https://trakt.tv/movies/{{trakt_id}}"
+    notify:
+      entries:
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.api ?}'
+              title: "Episode en téléchargement :"
+              message: "{{tvdb_series_name}} S{{tvdb_season}}E{{tvdb_episode}}"
+              url: "https://trakt.tv/movies/{{trakt_id}}"
     
   comics:
     inputs:
-      - rss: { url: 'https://extratorrent.stream/rss.xml?cid=848&type=last', silent: yes }
+      - rss: { url: 'http://raptorrents.com/rss.xml?cid=848&type=last', silent: yes }
     regexp:
       accept:
         - \DC Week\b: {from: title}
@@ -290,12 +304,15 @@ tasks:
         - \Image Week\b: {from: title}
     only_new: yes
     limit_new: 3
-    download: '{{ secrets.dirs.comics }}'
-    pushbullet:
-      api_key: '{{ secrets.pushbullet.api }}'
-      title: "Comics :"
-      message: "{{title}}"
-      url: "http://www.comiclist.com/index.php"
+    download: '{? dirs.comics ?}'
+    notify:
+      entries:
+        via:
+          - pushbullet:
+              api_key: '{? pushbullet.api ?}'
+              title: "Comics :"
+              message: "{{title}}"
+              url: "http://www.comiclist.com/index.php"
     
 schedules:
   - tasks: [movies-clean*, movies-update, movies-search]
@@ -308,7 +325,7 @@ schedules:
       hour: 19
   - tasks: [series*]
     schedule:
-      minute: 15
+      minute: 15,45
       hour: 1
   - tasks: [comics]
     schedule:
